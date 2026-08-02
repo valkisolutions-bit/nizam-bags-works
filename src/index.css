@@ -1,0 +1,56 @@
+@font-face {
+  font-family: "DSArabic";
+  src: url("/fonts/arab3end.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@import "tailwindcss";
+
+@media screen {
+  .receipt-container {
+    width: 300px;
+    margin: auto;
+  }
+}
+
+@media print {
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 80mm;
+    background: white;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .receipt-container,
+  .receipt-container * {
+    visibility: visible !important;
+  }
+
+.receipt-container {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 80mm !important;
+  height: auto !important;
+  overflow: visible !important;
+  background: white;
+  color: black;
+  padding: 5mm;
+}
+
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+}
