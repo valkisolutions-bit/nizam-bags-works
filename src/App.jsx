@@ -61,7 +61,7 @@ function App() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-screen bg-gray-100 print:bg-white">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-gray-100 print:bg-white">
 
       <header className="bg-white shadow-sm h-16 flex items-center justify-between px-6 shrink-0 print:hidden z-10">
         <div className="flex items-center gap-3">
@@ -97,7 +97,7 @@ function App() {
         </nav>
       </header>
 
-      <main className="flex-1 relative">
+      <main className="flex-1 overflow-hidden relative">
         {activeTab === 'pos' && (
           <PosTerminal
             inventory={inventory}

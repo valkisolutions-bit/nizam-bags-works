@@ -14,6 +14,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
   const [query, setQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const searchInputRef = useRef(null);
+  const discountInputRef = useRef(null);
   const listRef = useRef(null);
 
   // ── Price Entry Modal State ─────────────────────────────────────────────
@@ -67,6 +68,82 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
   // ── Calculations ────────────────────────────────────────────────────────
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price) * item.qty, 0);
   const finalTotal = Math.max(0, subtotal - Number(discount || 0));
+
+  // ── Global Keyboard Shortcuts ────────────────────────────────────────────
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      const key = e.key;
+      const ctrl = e.ctrlKey;
+
+      // ── F4: Global search override (works everywhere) ──
+      if (key === 'F4') {
+        e.preventDefault();
+        setPriceModal(null);
+        setPriceInput('');
+        setShowCheckout(false);
+        setPaymentMethod(null);
+        setAmountReceived('');
+        // Note: does NOT clear cart
+        setTimeout(() => searchInputRef.current?.focus(), 30);
+        return;
+      }
+
+      // ── Print receipt screen ──
+      if (showReceipt) {
+        if (key === 'Enter') { e.preventDefault(); window.print(); }
+        return;
+      }
+
+      // ── Price entry modal ──
+      if (priceModal) return; // handled by its own onKeyDown
+
+      // ── Checkout modal: UPI / CARD sub-screen ──
+      if (showCheckout && paymentMethod && paymentMethod !== 'CASH') {
+        if (key === 'Enter') {
+          e.preventDefault();
+          // trigger "YES, Received" — call handleCompleteOrder
+          // We call it via the ref to the latest version
+          handleCompleteOrderRef.current?.();
+        } else if (ctrl && key === 'w') {
+          e.preventDefault();
+          setPaymentMethod(null);
+        } else if (ctrl && key === 'c') {
+          e.preventDefault();
+          cancelOrderRef.current?.();
+        }
+        return;
+      }
+
+      // ── Checkout modal: CASH sub-screen — Enter handled via input onKeyDown ──
+      if (showCheckout && paymentMethod === 'CASH') return;
+
+      // ── Checkout modal: payment selection screen ──
+      if (showCheckout && !paymentMethod) {
+        if (key === 'F3') { e.preventDefault(); setPaymentMethod('CASH'); }
+        else if (key === 'F6') { e.preventDefault(); setPaymentMethod('CARD'); }
+        else if (key === 'F7') { e.preventDefault(); setPaymentMethod('UPI'); }
+        else if (ctrl && key === 'b') { e.preventDefault(); setShowCheckout(false); }
+        return;
+      }
+
+      // ── Main POS screen ──
+      if (key === 'F1') {
+        e.preventDefault();
+        if (cart.length > 0) setShowCheckout(true);
+      } else if (key === 'F2') {
+        e.preventDefault();
+        discountInputRef.current?.focus();
+        discountInputRef.current?.select();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [showReceipt, priceModal, showCheckout, paymentMethod, cart.length]);
+
+  // Stable refs — kept up to date every render so the keydown closure never goes stale
+  const handleCompleteOrderRef = useRef(null);
+  const cancelOrderRef = useRef(null);
 
   // ── Handlers: Search keyboard navigation ────────────────────────────────
   const handleSearchKeyDown = (e) => {
@@ -148,16 +225,17 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
     setCart((prev) => prev.filter((i) => i.cartKey !== cartKey));
   };
 
-  const cancelOrder = () => {
+  const cancelOrder = useCallback(() => {
     setCart([]);
     setDiscount(0);
     setShowCheckout(false);
     setPaymentMethod(null);
     setAmountReceived('');
-  };
+    returnFocusToSearch();
+  }, [returnFocusToSearch]);
 
   // ── Handlers: Complete Order ─────────────────────────────────────────────
-  const handleCompleteOrder = () => {
+  const handleCompleteOrder = useCallback(() => {
     const order = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
       date: new Date().toISOString(),
@@ -171,20 +249,24 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
     setLastOrder(order);
     setShowReceipt(true);
     cancelOrder();
-  };
+  }, [cart, subtotal, discount, finalTotal, paymentMethod, onCompleteOrder, cancelOrder]);
+
+  // Keep stable refs in sync with latest handlers every render
+  handleCompleteOrderRef.current = handleCompleteOrder;
+  cancelOrderRef.current = cancelOrder;
 
   // ── Render: Receipt mode ──────────────────────────────────────────────────
   if (showReceipt && lastOrder) {
-    return <Receipt order={lastOrder} onClose={() => setShowReceipt(false)} />;
+    return <Receipt order={lastOrder} onClose={() => { setShowReceipt(false); returnFocusToSearch(); }} />;
   }
 
   return (
-    <div className="flex h-full w-full">
+    <div className="flex h-full w-full overflow-hidden">
 
       {/* ══════════════════════════════════════════════════════
           LEFT PANEL — Search + Product List (70%)
       ══════════════════════════════════════════════════════ */}
-      <div className="w-[70%] flex flex-col bg-gray-50 border-r border-gray-200">
+      <div className="w-[70%] flex flex-col overflow-hidden bg-gray-50 border-r border-gray-200">
 
         {/* Search Bar */}
         <div className="p-4 bg-white shadow-sm shrink-0">
@@ -279,7 +361,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
       {/* ══════════════════════════════════════════════════════
           RIGHT PANEL — Cart / Billing (30%)
       ══════════════════════════════════════════════════════ */}
-      <div className="w-[30%] bg-white flex flex-col shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
+      <div className="w-[30%] bg-white flex flex-col overflow-hidden shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.05)] z-10">
         {/* Cart Header */}
         <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-bold flex items-center gap-2">
@@ -357,6 +439,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
             <div className="flex justify-between items-center">
               <span className="text-gray-500 text-sm">Discount (₹)</span>
               <input
+                ref={discountInputRef}
                 type="number"
                 value={discount || ''}
                 onChange={(e) => setDiscount(Math.max(0, Number(e.target.value)))}
@@ -475,6 +558,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     >
                       <Banknote size={48} className="text-emerald-500" />
                       <span className="font-bold text-xl">CASH</span>
+                      <kbd className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">F3</kbd>
                     </button>
                     <button
                       onClick={() => setPaymentMethod('UPI')}
@@ -482,6 +566,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     >
                       <Smartphone size={48} className="text-blue-500" />
                       <span className="font-bold text-xl">UPI</span>
+                      <kbd className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">F7</kbd>
                     </button>
                     <button
                       onClick={() => setPaymentMethod('CARD')}
@@ -489,14 +574,16 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     >
                       <CreditCard size={48} className="text-orange-500" />
                       <span className="font-bold text-xl">CARD</span>
+                      <kbd className="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded font-mono">F6</kbd>
                     </button>
                   </div>
                   <div className="mt-8 flex justify-center">
                     <button
                       onClick={() => setShowCheckout(false)}
-                      className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors"
+                      className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-2"
                     >
                       Back to Cart
+                      <kbd className="bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded font-mono">Ctrl+B</kbd>
                     </button>
                   </div>
                 </>
@@ -516,6 +603,12 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                       value={amountReceived}
                       onChange={(e) => setAmountReceived(e.target.value)}
                       onWheel={(e) => e.target.blur()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && Number(amountReceived) >= finalTotal) {
+                          e.preventDefault();
+                          handleCompleteOrder();
+                        }
+                      }}
                       className="w-full text-4xl p-4 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none"
                       placeholder="0"
                     />
@@ -564,23 +657,26 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     <div className="flex gap-4">
                       <button
                         onClick={handleCompleteOrder}
-                        className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/30"
+                        className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/30 flex flex-col items-center gap-1"
                       >
                         YES, Received
+                        <kbd className="bg-emerald-400/60 text-xs px-2 py-0.5 rounded font-mono font-normal">Enter</kbd>
                       </button>
                     </div>
                     <div className="flex gap-4 pt-4">
                       <button
                         onClick={() => setPaymentMethod(null)}
-                        className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors flex flex-col items-center gap-1"
                       >
                         Wait 2 Mins
+                        <kbd className="bg-gray-200 text-gray-500 text-xs px-2 py-0.5 rounded font-mono font-normal">Ctrl+W</kbd>
                       </button>
                       <button
                         onClick={cancelOrder}
-                        className="flex-1 py-4 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 transition-colors"
+                        className="flex-1 py-4 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 transition-colors flex flex-col items-center gap-1"
                       >
                         Cancel Order
+                        <kbd className="bg-red-200 text-red-500 text-xs px-2 py-0.5 rounded font-mono font-normal">Ctrl+C</kbd>
                       </button>
                     </div>
                   </div>

@@ -16,16 +16,16 @@ export default function Receipt({ order, onClose }) {
 
   return (
     <div className="absolute inset-0 bg-gray-100 flex flex-col items-center py-10 z-50 overflow-y-auto print:bg-white print:py-0 print:block">
-      
+
       {/* Non-printable controls */}
       <div className="no-print w-full max-w-[300px] flex gap-2 mb-4">
-        <button 
+        <button
           onClick={onClose}
           className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 py-3 rounded-lg font-bold text-gray-700 shadow-sm"
         >
           <ArrowLeft size={18} /> Back
         </button>
-        <button 
+        <button
           onClick={() => window.print()}
           className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-3 rounded-lg font-bold shadow-sm"
         >
@@ -35,26 +35,26 @@ export default function Receipt({ order, onClose }) {
 
       {/* The Printable Receipt (80mm is approx 300px) */}
       <div className="receipt-container bg-white p-4 w-[300px] text-black font-mono text-sm mx-auto">
-        
+
         {/* Header */}
         {/* Header */}
         <div className="text-center mb-4 border-b border-dashed border-gray-400 pb-4">
-<h1
-  className="font-bold mb-2"
-  style={{
-    fontFamily: "DSArabic",
-    fontSize: "32px",
-    lineHeight: "1.1"
-  }}
->
-  Nizam Bag Works
-</h1>
+          <h1
+            className="font-bold mb-2"
+            style={{
+              fontFamily: "DSArabic",
+              fontSize: "38px",
+              lineHeight: "1.1"
+            }}
+          >
+            Nizam Bag Works
+          </h1>
 
-  <p className="text-xs">No.50 SV Nagar, Redhills Road, Ambattur, Chennai - 53</p>
-  <p className="text-xs">Ph: 044-26581630 / 9841398633</p>
-  <p className="text-xs">GSTIN: 33AXEPA4674K1ZI</p>
-  <p className="text-xs">Email: nizambags1@gmail.com</p>
-</div>
+          <p className="text-xs">No.50 SV Nagar, Redhills Road, Ambattur, Chennai - 53</p>
+          <p className="text-xs">Ph: 044-26581630 / 9841398633</p>
+          <p className="text-xs">GSTIN: 33AXEPA4674K1ZI</p>
+          <p className="text-xs">Email: nizambags1@gmail.com</p>
+        </div>
 
         {/* Info */}
         <div className="mb-4 text-xs flex justify-between">
@@ -71,8 +71,9 @@ export default function Receipt({ order, onClose }) {
         {/* Items Header */}
         <div className="grid grid-cols-12 border-y border-dashed border-gray-400 py-1 mb-2 font-bold text-xs">
           <div className="col-span-1">Sn</div>
-          <div className="col-span-6">Item</div>
-          <div className="col-span-2 text-center">Qty</div>
+          <div className="col-span-4">Item</div>
+          <div className="col-span-1 text-center">Qty</div>
+          <div className="col-span-3 text-right">₹/Unit</div>
           <div className="col-span-3 text-right">Amt</div>
         </div>
 
@@ -81,9 +82,10 @@ export default function Receipt({ order, onClose }) {
           {order.items.map((item, index) => (
             <div key={item.id} className="grid grid-cols-12 text-xs items-start">
               <div className="col-span-1">{index + 1}</div>
-              <div className="col-span-6 pr-1 leading-tight break-words">{item.name}</div>
-              <div className="col-span-2 text-center">{item.qty}</div>
-              <div className="col-span-3 text-right">₹{item.price * item.qty}</div>
+              <div className="col-span-4 pr-1 leading-tight break-words">{item.name}</div>
+              <div className="col-span-1 text-center">{item.qty}</div>
+              <div className="col-span-3 text-right">₹{Number(item.price).toFixed(2)}</div>
+              <div className="col-span-3 text-right">₹{(item.price * item.qty).toFixed(2)}</div>
             </div>
           ))}
         </div>
