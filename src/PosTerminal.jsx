@@ -21,6 +21,7 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
   const [priceModal, setPriceModal] = useState(null); // { id, name } | null
   const [priceInput, setPriceInput] = useState('');
   const priceInputRef = useRef(null);
+  const yesReceivedBtnRef = useRef(null);
 
   // ── Checkout / Receipt State ────────────────────────────────────────────
   const [showCheckout, setShowCheckout] = useState(false);
@@ -60,6 +61,13 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
     }
   }, [priceModal]);
 
+  // Auto-focus YES Received button when UPI or CARD modal opens
+  useEffect(() => {
+    if (showCheckout && paymentMethod && paymentMethod !== 'CASH') {
+      setTimeout(() => yesReceivedBtnRef.current?.focus(), 50);
+    }
+  }, [showCheckout, paymentMethod]);
+
   // Return focus to search after modal closes
   const returnFocusToSearch = useCallback(() => {
     setTimeout(() => searchInputRef.current?.focus(), 50);
@@ -75,54 +83,78 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
       const key = e.key;
       const ctrl = e.ctrlKey;
 
-      // ── F4: Global search override (works everywhere) ──
+      // ── F4: Global search override / Modal Close ──
       if (key === 'F4') {
         e.preventDefault();
-        setPriceModal(null);
-        setPriceInput('');
-        setShowCheckout(false);
-        setPaymentMethod(null);
-        setAmountReceived('');
-        // Note: does NOT clear cart
-        setTimeout(() => searchInputRef.current?.focus(), 30);
+        e.stopPropagation();
+        document.activeElement?.blur();
+        if (showReceipt) {
+          setShowReceipt(false);
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        } else if (showCheckout && paymentMethod && paymentMethod !== 'CASH') {
+          // Inside UPI/CARD modal: F4 triggers "Wait 2 Mins" (goes back to payment selection)
+          setPaymentMethod(null);
+        } else {
+          // Everywhere else (including Payment Selection screen): close all modals, keep cart intact, focus product search
+          setPriceModal(null);
+          setPriceInput('');
+          setShowCheckout(false);
+          setPaymentMethod(null);
+          setAmountReceived('');
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        }
         return;
       }
 
       // ── Print receipt screen ──
       if (showReceipt) {
-        if (key === 'Enter') { e.preventDefault(); window.print(); }
+        if (key === 'Enter') {
+          e.preventDefault();
+          window.print();
+        } else if (key === 'Escape' || key === 'F8' || (ctrl && (key === 'c' || key === 'C'))) {
+          e.preventDefault();
+          setShowReceipt(false);
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        }
         return;
       }
 
       // ── Price entry modal ──
-      if (priceModal) return; // handled by its own onKeyDown
+      if (priceModal) return; // handled by price modal onKeyDown
 
       // ── Checkout modal: UPI / CARD sub-screen ──
       if (showCheckout && paymentMethod && paymentMethod !== 'CASH') {
         if (key === 'Enter') {
           e.preventDefault();
-          // trigger "YES, Received" — call handleCompleteOrder
-          // We call it via the ref to the latest version
+          e.stopPropagation();
+          document.activeElement?.blur();
           handleCompleteOrderRef.current?.();
-        } else if (ctrl && key === 'w') {
+        } else if (ctrl && (key === 'c' || key === 'C')) {
           e.preventDefault();
-          setPaymentMethod(null);
-        } else if (ctrl && key === 'c') {
-          e.preventDefault();
+          e.stopPropagation();
+          document.activeElement?.blur();
           cancelOrderRef.current?.();
         }
         return;
       }
 
-      // ── Checkout modal: CASH sub-screen — Enter handled via input onKeyDown ──
-      if (showCheckout && paymentMethod === 'CASH') return;
+      // ── Checkout modal: CASH sub-screen ──
+      if (showCheckout && paymentMethod === 'CASH') {
+        if (ctrl && (key === 'c' || key === 'C')) {
+          e.preventDefault();
+          e.stopPropagation();
+          document.activeElement?.blur();
+          cancelOrderRef.current?.();
+        }
+        return;
+      }
 
       // ── Checkout modal: payment selection screen ──
       if (showCheckout && !paymentMethod) {
         if (key === 'F3') { e.preventDefault(); setPaymentMethod('CASH'); }
         else if (key === 'F6') { e.preventDefault(); setPaymentMethod('CARD'); }
         else if (key === 'F7') { e.preventDefault(); setPaymentMethod('UPI'); }
-        else if (ctrl && key === 'b') { e.preventDefault(); setShowCheckout(false); }
+        // F4 handles closing payment selection modal back to cart & focusing search
         return;
       }
 
@@ -236,6 +268,8 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
 
   // ── Handlers: Complete Order ─────────────────────────────────────────────
   const handleCompleteOrder = useCallback(() => {
+    if (cart.length === 0) return;
+
     const order = {
       id: `ORD-${Date.now().toString().slice(-6)}`,
       date: new Date().toISOString(),
@@ -248,8 +282,12 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
     onCompleteOrder(order);
     setLastOrder(order);
     setShowReceipt(true);
-    cancelOrder();
-  }, [cart, subtotal, discount, finalTotal, paymentMethod, onCompleteOrder, cancelOrder]);
+    setCart([]);
+    setDiscount(0);
+    setShowCheckout(false);
+    setPaymentMethod(null);
+    setAmountReceived('');
+  }, [cart, subtotal, discount, finalTotal, paymentMethod, onCompleteOrder]);
 
   // Keep stable refs in sync with latest handlers every render
   handleCompleteOrderRef.current = handleCompleteOrder;
@@ -579,11 +617,12 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                   </div>
                   <div className="mt-8 flex justify-center">
                     <button
-                      onClick={() => setShowCheckout(false)}
+                      type="button"
+                      onClick={() => { setShowCheckout(false); returnFocusToSearch(); }}
                       className="px-8 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-2"
                     >
                       Back to Cart
-                      <kbd className="bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded font-mono">Ctrl+B</kbd>
+                      <kbd className="bg-gray-100 text-gray-400 text-xs px-2 py-0.5 rounded font-mono">F4</kbd>
                     </button>
                   </div>
                 </>
@@ -656,8 +695,11 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     </p>
                     <div className="flex gap-4">
                       <button
-                        onClick={handleCompleteOrder}
-                        className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/30 flex flex-col items-center gap-1"
+                        ref={yesReceivedBtnRef}
+                        autoFocus
+                        type="button"
+                        onClick={(e) => { e.currentTarget.blur(); handleCompleteOrder(); }}
+                        className="flex-1 py-5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/30 flex flex-col items-center gap-1 focus:ring-4 focus:ring-emerald-300 focus:outline-none"
                       >
                         YES, Received
                         <kbd className="bg-emerald-400/60 text-xs px-2 py-0.5 rounded font-mono font-normal">Enter</kbd>
@@ -665,14 +707,16 @@ export default function PosTerminal({ inventory, onCompleteOrder }) {
                     </div>
                     <div className="flex gap-4 pt-4">
                       <button
-                        onClick={() => setPaymentMethod(null)}
+                        type="button"
+                        onClick={(e) => { e.currentTarget.blur(); setPaymentMethod(null); }}
                         className="flex-1 py-4 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors flex flex-col items-center gap-1"
                       >
                         Wait 2 Mins
-                        <kbd className="bg-gray-200 text-gray-500 text-xs px-2 py-0.5 rounded font-mono font-normal">Ctrl+W</kbd>
+                        <kbd className="bg-gray-200 text-gray-500 text-xs px-2 py-0.5 rounded font-mono font-normal">F4</kbd>
                       </button>
                       <button
-                        onClick={cancelOrder}
+                        type="button"
+                        onClick={(e) => { e.currentTarget.blur(); cancelOrder(); }}
                         className="flex-1 py-4 bg-red-100 text-red-600 font-bold rounded-xl hover:bg-red-200 transition-colors flex flex-col items-center gap-1"
                       >
                         Cancel Order
