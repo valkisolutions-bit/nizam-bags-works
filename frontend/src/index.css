@@ -3,6 +3,7 @@
   src: url("/fonts/arab3end.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
+  font-display: block;
 }
 
 @import "tailwindcss";
@@ -15,7 +16,6 @@
 }
 
 @media print {
-
   html,
   body {
     margin: 0 !important;
@@ -33,17 +33,17 @@
     visibility: visible !important;
   }
 
-.receipt-container {
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: 80mm !important;
-  height: auto !important;
-  overflow: visible !important;
-  background: white;
-  color: black;
-  padding: 5mm;
-}
+  .receipt-container {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 80mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white;
+    color: black;
+    padding: 5mm;
+  }
 
   .no-print {
     display: none !important;

@@ -81,6 +81,11 @@ async function initDatabase() {
   }
 }
 
+// Simple health endpoint used by Docker to know when the API is ready.
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // ── 2. Order Endpoints ───────────────────────────────────────────────────────
 
 /**

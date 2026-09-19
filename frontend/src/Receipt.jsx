@@ -1,10 +1,32 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Printer, ArrowLeft } from 'lucide-react';
 
 export default function Receipt({ order, onClose }) {
+  const [fontReady, setFontReady] = useState(false);
+
+  // Load the EXISTING DSArabic font before the receipt is displayed/printed.
+  // This prevents the first-open/second-open font inconsistency.
   useEffect(() => {
-    // Optional: auto-print when receipt is shown
-    // window.print();
+    let mounted = true;
+
+    const loadReceiptFont = async () => {
+      try {
+        if (document.fonts?.load) {
+          await document.fonts.load('36px "DSArabic"');
+          await document.fonts.ready;
+        }
+      } catch (err) {
+        console.warn('DSArabic font could not be preloaded:', err);
+      } finally {
+        if (mounted) setFontReady(true);
+      }
+    };
+
+    loadReceiptFont();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!order) return null;
@@ -13,6 +35,17 @@ export default function Receipt({ order, onClose }) {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit', hour12: true
   });
+
+  const handlePrint = async () => {
+    try {
+      if (document.fonts?.load) {
+        await document.fonts.load('36px "DSArabic"');
+        await document.fonts.ready;
+      }
+    } finally {
+      window.print();
+    }
+  };
 
   return (
     <div className="absolute inset-0 bg-gray-100 flex flex-col items-center py-10 z-50 overflow-y-auto print:bg-white print:py-0 print:block">
@@ -26,10 +59,11 @@ export default function Receipt({ order, onClose }) {
           <ArrowLeft size={18} /> Back
         </button>
         <button
-          onClick={() => window.print()}
-          className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-3 rounded-lg font-bold shadow-sm"
+          onClick={handlePrint}
+          disabled={!fontReady}
+          className="flex-1 flex items-center justify-center gap-2 bg-purple-600 text-white py-3 rounded-lg font-bold shadow-sm disabled:opacity-60"
         >
-          <Printer size={18} /> Print Bill
+          <Printer size={18} /> {fontReady ? 'Print Bill' : 'Loading…'}
         </button>
       </div>
 
@@ -37,17 +71,29 @@ export default function Receipt({ order, onClose }) {
       <div className="receipt-container bg-white p-4 w-[300px] text-black font-mono text-sm mx-auto">
 
         {/* Header */}
-        {/* Header */}
         <div className="text-center mb-4 border-b border-dashed border-gray-400 pb-4">
           <h1
             className="font-bold mb-2"
             style={{
-              fontFamily: "DSArabic",
-              fontSize: "38px",
-              lineHeight: "1.1"
+              fontFamily: '"DSArabic"',
+              fontSize: "36px",
+              lineHeight: "1.1",
+              textAlign: "center",
+              width: "100%",
+              margin: 0
             }}
           >
-            Nizam Bag Works
+            <span>Nizam Bags </span>
+            <span
+              style={{
+                fontFamily: '"DSArabic"',
+                fontSize: "36px",
+                lineHeight: "1.1",
+                display: "inline-block"
+              }}
+            >
+              works
+            </span>
           </h1>
 
           <p className="text-xs">No.50 SV Nagar, Redhills Road, Ambattur, Chennai - 53</p>
@@ -114,7 +160,6 @@ export default function Receipt({ order, onClose }) {
           <p>Return Policy: No exchange after 3 days.</p>
         </div>
       </div>
-
     </div>
   );
 }

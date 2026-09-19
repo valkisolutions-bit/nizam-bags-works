@@ -1,37 +1,49 @@
-version: '3.8'
-
 services:
   mysql-db:
     image: mysql:8.0
-    restart: always
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: password123
       MYSQL_DATABASE: nazim_pos
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -ppassword123 --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   backend:
     build: ./backend
-    restart: always
+    restart: unless-stopped
     environment:
-      - DB_HOST=mysql-db
-      - DB_USER=root
-      - DB_PASSWORD=password123
-      - DB_NAME=nazim_pos
+      DB_HOST: mysql-db
+      DB_USER: root
+      DB_PASSWORD: password123
+      DB_NAME: nazim_pos
     ports:
       - "5000:5000"
     depends_on:
-      - mysql-db
+      mysql-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   frontend:
     build: ./frontend
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   db_data:
