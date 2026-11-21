@@ -25,8 +25,8 @@ if (-not $ready) {
     Write-Host "Docker Engine is not ready. Start Docker Desktop and try again." -ForegroundColor Red
     exit 1
 }
-
-docker compose up -d --build
+$composeFile = if (Test-Path "$ProjectRoot\docker-compose.prod.yml") { "docker-compose.prod.yml" } else { "docker-compose.yml" }
+docker compose -f $composeFile up -d
 
 # Wait for the web page to answer before opening Chrome.
 for ($i = 0; $i -lt 30; $i++) {

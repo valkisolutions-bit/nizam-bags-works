@@ -8,8 +8,11 @@ echo "Starting Nizam Bags POS..."
 until docker info >/dev/null 2>&1; do
   sleep 5
 done
-
-docker compose up -d --build
+COMPOSE_FILE="docker-compose.prod.yml"
+if [ ! -f "$COMPOSE_FILE" ]; then
+  COMPOSE_FILE="docker-compose.yml"
+fi
+docker compose -f "$COMPOSE_FILE" up -d
 
 until curl -fsS http://localhost >/dev/null 2>&1; do
   sleep 2

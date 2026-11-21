@@ -1,3 +1,5 @@
+name: nizam-bags-works
+
 services:
   mysql-db:
     image: mysql:8.0
@@ -17,6 +19,7 @@ services:
       start_period: 10s
 
   backend:
+    image: valkisolutions/nizam-backend:${IMAGE_TAG:-latest}
     build: ./backend
     restart: unless-stopped
     environment:
@@ -37,6 +40,7 @@ services:
       start_period: 10s
 
   frontend:
+    image: valkisolutions/nizam-frontend:${IMAGE_TAG:-latest}
     build: ./frontend
     restart: unless-stopped
     ports:

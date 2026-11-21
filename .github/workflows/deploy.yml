@@ -1,0 +1,115 @@
+name: CI/CD Pipeline - Build, Push & Release Nizam POS
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+    inputs:
+      custom_tag:
+        description: 'Optional custom image tag (e.g. v1.0.1)'
+        required: false
+        default: ''
+
+jobs:
+  build-push-and-package:
+    name: Build, Push & Create Client Deployment Script
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags and metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          
+          # Base tags
+          BACKEND_TAGS="valkisolutions/nizam-backend:$SHORT_SHA,valkisolutions/nizam-backend:develop,valkisolutions/nizam-backend:latest"
+          FRONTEND_TAGS="valkisolutions/nizam-frontend:$SHORT_SHA,valkisolutions/nizam-frontend:develop,valkisolutions/nizam-frontend:latest"
+          
+          # Custom tag if provided via manual dispatch
+          if [ -n "${{ github.event.inputs.custom_tag }}" ]; then
+            BACKEND_TAGS="$BACKEND_TAGS,valkisolutions/nizam-backend:${{ github.event.inputs.custom_tag }}"
+            FRONTEND_TAGS="$FRONTEND_TAGS,valkisolutions/nizam-frontend:${{ github.event.inputs.custom_tag }}"
+          fi
+          
+          echo "BACKEND_TAGS=$BACKEND_TAGS" >> $GITHUB_ENV
+          echo "FRONTEND_TAGS=$FRONTEND_TAGS" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Backend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.BACKEND_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Frontend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.FRONTEND_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Package Client Deployment Bundle
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p client-deployment/scripts
+          
+          # Copy production compose file (both names for compatibility)
+          cp docker-compose.prod.yml client-deployment/docker-compose.prod.yml
+          cp docker-compose.prod.yml client-deployment/docker-compose.yml
+          
+          # Copy root updater
+          cp update-nizam-pos.bat client-deployment/update-nizam-pos.bat
+          
+          # Copy client documentation
+          cp README_CLIENT.md client-deployment/README_CLIENT.md
+          
+          # Copy all scripts
+          cp -r scripts/* client-deployment/scripts/
+
+      - name: Upload Client Deployment Artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nizam-pos-client-deploy-${{ env.SHORT_SHA }}
+          path: client-deployment/
+          retention-days: 30
+
+      - name: Generate Run Summary
+        run: |
+          echo "### 🚀 Nizam Bags POS Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger Event:** \`${{ github.event_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA:** \`${{ env.SHORT_SHA }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### 🐳 Docker Images Pushed to Docker Hub:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`valkisolutions/nizam-frontend:${{ env.SHORT_SHA }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`valkisolutions/nizam-frontend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`valkisolutions/nizam-backend:${{ env.SHORT_SHA }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`valkisolutions/nizam-backend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### 📦 Client Deployment Artifact:" >> $GITHUB_STEP_SUMMARY
+          echo "The client updater bundle \`nizam-pos-client-deploy-${{ env.SHORT_SHA }}.zip\` is available in the Artifacts section above." >> $GITHUB_STEP_SUMMARY
+          echo "Extract it on the client's PC and double-click \`update-nizam-pos.bat\`." >> $GITHUB_STEP_SUMMARY
